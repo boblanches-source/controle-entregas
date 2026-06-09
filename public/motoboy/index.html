@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Motoboy | Entregas</title>
+  <script>
+    window.API_BASE = 'http://localhost:3000';
+  </script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    :root {
+      --bg: #050816;
+      --panel: #0f172a;
+      --card: #111827;
+      --line: #263244;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --success: #22c55e;
+      --warn: #f59e0b;
+      --danger: #ef4444;
+      --radius: 18px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(180deg, #020617, #0f172a);
+      color: var(--text);
+    }
+
+    .app {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+    }
+
+    .sub {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .online { background: rgba(34, 197, 94, .14); color: #86efac; }
+    .offline { background: rgba(239, 68, 68, .14); color: #fca5a5; }
+
+    .panel {
+      background: rgba(15, 23, 42, .96);
+      border: 1px solid rgba(148, 163, 184, .14);
+      border-radius: var(--radius);
+      padding: 14px;
+      margin-bottom: 14px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.22);
+    }
+
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .panel h2 {
+      margin: 0;
+      font-size: 17px;
+    }
+
+    .btn {
+      border: 0;
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-weight: 700;
+      cursor: pointer;
+      color: white;
+      background: linear-gradient(90deg, #2563eb, #22c55e);
+      width: 100%;
+    }
+
+    .btn.secondary {
+      background: #334155;
+    }
+
+    .btn.success {
+      background: #16a34a;
+    }
+
+    .btn.warn {
+      background: #d97706;
+    }
+
+    .orders {
+      display: grid;
+      gap: 12px;
+    }
+
+    .order-card {
+      background: rgba(17, 24, 39, .95);
+      border: 1px solid rgba(148, 163, 184, .12);
+      border-radius: 16px;
+      padding: 14px;
+    }
+
+    .order-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .customer {
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .actions {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .inline {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    select, input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #020617;
+      color: var(--text);
+      padding: 12px 14px;
+      font-size: 15px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .summary-box {
+      background: rgba(2, 6, 23, .7);
+      border: 1px solid rgba(148, 163, 184, .12);
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    .summary-box .label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .summary-box .value {
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .empty {
+      border: 1px dashed rgba(148, 163, 184, .28);
+      border-radius: 16px;
+      padding: 18px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    @media (max-width: 700px) {
+      .summary-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="topbar">
+      <div>
+        <h1>App do Motoboy</h1>
+        <p class="sub">Recebimento de pedidos, início da rota e confirmação da entrega.</p>
+      </div>
+      <div id="connectionStatus" class="badge offline">Conectando...</div>
+    </div>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Pedidos em tempo real</h2>
+        <button id="toggleSummaryBtn" class="btn secondary" style="width:auto; padding:10px 12px;">Resumo do Turno</button>
+      </div>
+
+      <div id="summaryPanel" class="inline" style="display:none;">
+        <div class="summary-grid">
+          <div class="summary-box">
+            <div class="label">Total entregas</div>
+            <div id="sumTotal" class="value">0</div>
+          </div>
+          <div class="summary-box">
+            <div class="label">Dinheiro</div>
+            <div id="sumDinheiro" class="value">0</div>
+          </div>
+          <div class="summary-box">
+            <div class="label">Cartão</div>
+            <div id="sumCartao" class="value">0</div>
+          </div>
+          <div class="summary-box">
+            <div class="label">Pix</div>
+            <div id="sumPix" class="value">0</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Pedidos Ativos</h2>
+        <button id="refreshBtn" class="btn secondary" style="width:auto; padding:10px 12px;">Atualizar</button>
+      </div>
+
+      <div id="ordersContainer" class="orders"></div>
+    </section>
+  </main>
+
+  <script src="./app.js"></script>
+</body>
+</html>
