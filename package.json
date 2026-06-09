@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Sistema de Controle de Entregas em Tempo Real",
   "main": "server.js",
+  "engines": {
+    "node": "22.x"
+  },
   "scripts": {
     "start": "node server.js",
     "migrate": "knex migrate:latest"
