@@ -1,4 +1,4 @@
-const API_BASE = window.API_BASE || 'http://localhost:3000';
+const API_BASE = 'https://controle-entregas-owfe.onrender.com';
 const socket = io(API_BASE, { transports: ['websocket', 'polling'] });
 
 const state = {
