@@ -1,3 +1,4 @@
+
 const API_BASE = 'https://controle-entregas-owfe.onrender.com';
 const socket = io(API_BASE, { transports: ['websocket', 'polling'] });
 
@@ -5,6 +6,7 @@ const state = {
   orders: [],
   summary: null,
   finishingOrderId: null,
+  darkMode: true,
 };
 
 const connectionStatus = document.getElementById('connectionStatus');
@@ -12,11 +14,13 @@ const ordersContainer = document.getElementById('ordersContainer');
 const refreshBtn = document.getElementById('refreshBtn');
 const toggleSummaryBtn = document.getElementById('toggleSummaryBtn');
 const summaryPanel = document.getElementById('summaryPanel');
+const themeToggleBtn = document.getElementById('themeToggleBtn');
 
 const sumTotal = document.getElementById('sumTotal');
 const sumDinheiro = document.getElementById('sumDinheiro');
 const sumCartao = document.getElementById('sumCartao');
 const sumPix = document.getElementById('sumPix');
+const receiptTemplate = document.getElementById('receiptTemplate');
 
 function statusLabel(status) {
   const map = {
@@ -31,6 +35,44 @@ function statusBadgeClass(status) {
   if (status === 'em_rota') return 'online';
   if (status === 'entregue') return 'offline';
   return 'badge';
+}
+
+function paymentLabel(value) {
+  return value || '-';
+}
+
+function formatMoney(value) {
+  if (value === null || value === undefined || value === '') return '-';
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '-';
+  return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function formatDateTime(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function isDarkMode() {
+  return state.darkMode;
+}
+
+function applyTheme() {
+  document.body.classList.toggle('dark', isDarkMode());
+  themeToggleBtn.textContent = isDarkMode() ? 'Modo claro' : 'Modo escuro';
+  localStorage.setItem('motoboy-theme', isDarkMode() ? 'dark' : 'light');
+}
+
+function toggleTheme() {
+  state.darkMode = !state.darkMode;
+  applyTheme();
 }
 
 function upsertOrder(order) {
@@ -101,19 +143,32 @@ function renderOrders() {
 
 function renderCard(order) {
   const isFinishing = state.finishingOrderId === order.id;
+  const deliveredAt = order.delivered_at ? formatDateTime(order.delivered_at) : '-';
 
   return `
-    <article class="order-card">
+    <article class="order-card status-${order.status}">
       <div class="order-head">
         <div>
           <div class="customer">#${order.id} · ${order.customer_name}</div>
           <div class="meta">
-            Pagamento inicial: <strong>${order.initial_payment_method}</strong><br />
+            Pagamento inicial: <strong>${paymentLabel(order.initial_payment_method)}</strong><br />
             Bebida: <strong>${order.has_drink ? 'Sim' : 'Não'}</strong><br />
-            Status: <strong>${statusLabel(order.status)}</strong>
+            Precisa de troco: <strong>${order.needs_change ? 'Sim' : 'Não'}</strong><br />
+            Status: <strong>${statusLabel(order.status)}</strong><br />
+            ${order.delivered_at ? `Hora da entrega: <strong>${deliveredAt}</strong><br />` : ''}
+            ${order.final_payment_method ? `Pagamento final: <strong>${order.final_payment_method}</strong><br />` : ''}
+            ${order.final_payment_method === 'Dinheiro' && order.cash_received != null ? `Recebido: <strong>${formatMoney(order.cash_received)}</strong><br />` : ''}
+            ${order.final_payment_method === 'Dinheiro' && order.cash_change != null ? `Troco: <strong>${formatMoney(order.cash_change)}</strong><br />` : ''}
           </div>
         </div>
         <div class="badge ${statusBadgeClass(order.status)}">${statusLabel(order.status)}</div>
+      </div>
+
+      <div class="pill-row">
+        ${order.status === 'aguardando' ? '<span class="pill warn">Aguardando partida</span>' : ''}
+        ${order.status === 'em_rota' ? '<span class="pill blue">Em rota</span>' : ''}
+        ${order.status === 'entregue' ? '<span class="pill green">Entregue</span>' : ''}
+        ${order.needs_change ? '<span class="pill warn">Troco solicitado</span>' : '<span class="pill">Sem troco</span>'}
       </div>
 
       <div class="actions">
@@ -138,18 +193,35 @@ function renderCard(order) {
         isFinishing
           ? `
             <div class="inline">
-              <select id="payment-${order.id}">
-                <option value="">Confirme a forma de pagamento final</option>
-                <option>Dinheiro</option>
-                <option>Cartão</option>
-                <option>Pix</option>
-              </select>
-              <button class="btn success" data-action="confirm-finish" data-id="${order.id}">
-                Confirmar Entrega
-              </button>
-              <button class="btn secondary" data-action="cancel-finish" data-id="${order.id}">
-                Cancelar
-              </button>
+              <div class="cash-box">
+                <label style="display:block; font-size:13px; font-weight:700; color:var(--muted);">
+                  Forma de pagamento final
+                </label>
+                <select id="payment-${order.id}" data-order-id="${order.id}">
+                  <option value="">Selecione</option>
+                  <option>Dinheiro</option>
+                  <option>Cartão</option>
+                  <option>Pix</option>
+                </select>
+
+                <div id="cashFields-${order.id}" style="display:none;" class="cash-grid">
+                  <div>
+                    <label style="display:block; font-size:13px; font-weight:700; color:var(--muted); margin-bottom:6px;">Quanto recebeu</label>
+                    <input id="received-${order.id}" inputmode="decimal" placeholder="Ex.: 50,00" />
+                  </div>
+                  <div>
+                    <label style="display:block; font-size:13px; font-weight:700; color:var(--muted); margin-bottom:6px;">Quanto deu de troco</label>
+                    <input id="change-${order.id}" inputmode="decimal" placeholder="Ex.: 7,00" />
+                  </div>
+                </div>
+
+                <button class="btn success" data-action="confirm-finish" data-id="${order.id}">
+                  Confirmar Entrega e Imprimir 58mm
+                </button>
+                <button class="btn secondary" data-action="cancel-finish" data-id="${order.id}">
+                  Cancelar
+                </button>
+              </div>
             </div>
           `
           : ''
@@ -157,6 +229,133 @@ function renderCard(order) {
     </article>
   `;
 }
+
+function updateCashFieldsVisibility(orderId) {
+  const select = document.getElementById(`payment-${orderId}`);
+  const cashFields = document.getElementById(`cashFields-${orderId}`);
+  if (!select || !cashFields) return;
+
+  cashFields.style.display = select.value === 'Dinheiro' ? 'grid' : 'none';
+}
+
+function parseMoneyInput(value) {
+  const cleaned = String(value || '')
+    .trim()
+    .replace(/\./g, '')
+    .replace(',', '.')
+    .replace(/[^\d.\\-]/g, '');
+
+  if (cleaned === '') return null;
+  const num = Number(cleaned);
+  return Number.isFinite(num) ? num : null;
+}
+
+function escapeHtml(text) {
+  return String(text ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
+}
+
+function openReceiptWindow(order) {
+  const received = order.cash_received != null ? formatMoney(order.cash_received) : '-';
+  const change = order.cash_change != null ? formatMoney(order.cash_change) : '-';
+  const windowRef = window.open('', '_blank', 'width=380,height=700');
+  if (!windowRef) {
+    alert('O navegador bloqueou a impressão. Permita pop-ups para imprimir o comprovante.');
+    return;
+  }
+
+  const html = `
+    <!doctype html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Comprovante 58mm</title>
+      <style>
+        @page { size: 58mm auto; margin: 2mm; }
+        body {
+          width: 58mm;
+          margin: 0;
+          padding: 0;
+          font-family: Arial, Helvetica, sans-serif;
+          color: #000;
+          font-size: 10pt;
+        }
+        .receipt { width: 58mm; padding: 2mm; box-sizing: border-box; }
+        h1 {
+          font-size: 12pt;
+          margin: 0 0 4px;
+          text-align: center;
+        }
+        .center { text-align: center; }
+        .line {
+          border-top: 1px dashed #000;
+          margin: 6px 0;
+        }
+        .row {
+          display: flex;
+          justify-content: space-between;
+          gap: 6px;
+          margin: 2px 0;
+          word-break: break-word;
+        }
+        .muted {
+          font-size: 9pt;
+        }
+        .btn {
+          margin-top: 10px;
+          width: 100%;
+          padding: 8px 10px;
+          border: 0;
+          border-radius: 8px;
+          background: #000;
+          color: #fff;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="receipt">
+        <h1>Bob Lanches</h1>
+        <div class="center muted">Comprovante de Entrega</div>
+        <div class="line"></div>
+        <div class="row"><strong>Pedido</strong><span>#${escapeHtml(order.id)}</span></div>
+        <div class="row"><strong>Cliente</strong><span>${escapeHtml(order.customer_name)}</span></div>
+        <div class="row"><strong>Pagamento</strong><span>${escapeHtml(order.final_payment_method || '-')}</span></div>
+        <div class="row"><strong>Bebida</strong><span>${order.has_drink ? 'Sim' : 'Não'}</span></div>
+        <div class="row"><strong>Hora entrega</strong><span>${escapeHtml(formatDateTime(order.delivered_at))}</span></div>
+        <div class="line"></div>
+        <div class="row"><strong>Recebido</strong><span>${escapeHtml(received)}</span></div>
+        <div class="row"><strong>Troco</strong><span>${escapeHtml(change)}</span></div>
+        <div class="line"></div>
+        <div class="center muted">Obrigado e volte sempre!</div>
+        <button class="btn" onclick="window.print()">Imprimir</button>
+      </div>
+      <script>
+        window.onload = function () {
+          setTimeout(function () {
+            window.print();
+          }, 250);
+        };
+      </script>
+    </body>
+    </html>
+  `;
+
+  windowRef.document.open();
+  windowRef.document.write(html);
+  windowRef.document.close();
+}
+
+ordersContainer.addEventListener('change', (event) => {
+  const select = event.target.closest('select[data-order-id]');
+  if (!select) return;
+  const orderId = select.getAttribute('data-order-id');
+  updateCashFieldsVisibility(orderId);
+});
 
 ordersContainer.addEventListener('click', async (event) => {
   const button = event.target.closest('button[data-action]');
@@ -202,12 +401,37 @@ ordersContainer.addEventListener('click', async (event) => {
       return;
     }
 
+    let cashReceived = null;
+    let cashChange = null;
+
+    if (finalPayment === 'Dinheiro') {
+      const receivedInput = document.getElementById(`received-${orderId}`);
+      const changeInput = document.getElementById(`change-${orderId}`);
+
+      cashReceived = parseMoneyInput(receivedInput?.value);
+      cashChange = parseMoneyInput(changeInput?.value);
+
+      if (cashReceived === null) {
+        alert('Informe quanto recebeu do cliente.');
+        return;
+      }
+
+      if (cashChange === null) {
+        alert('Informe quanto deu de troco.');
+        return;
+      }
+    }
+
     const response = await fetch(`${API_BASE}/api/orders/${orderId}/finish`, {
       method: 'PATCH',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ final_payment_method: finalPayment }),
+      body: JSON.stringify({
+        final_payment_method: finalPayment,
+        cash_received: cashReceived,
+        cash_change: cashChange,
+      }),
     });
 
     if (!response.ok) {
@@ -218,6 +442,7 @@ ordersContainer.addEventListener('click', async (event) => {
 
     state.finishingOrderId = null;
     const updated = await response.json();
+    openReceiptWindow(updated);
     removeOrder(updated.id);
     await loadSummary();
   }
@@ -237,6 +462,8 @@ toggleSummaryBtn.addEventListener('click', async () => {
   }
 });
 
+themeToggleBtn.addEventListener('click', toggleTheme);
+
 socket.on('connect', () => {
   connectionStatus.textContent = 'Online';
   connectionStatus.classList.remove('offline');
@@ -251,7 +478,7 @@ socket.on('disconnect', () => {
 });
 
 socket.on('sync:orders', ({ orders }) => {
-  setOrders(orders.filter((order) => order.status !== 'entregue'));
+  setOrders((orders || []).filter((order) => order.status !== 'entregue'));
 });
 
 socket.on('order:created', (order) => {
@@ -270,6 +497,12 @@ socket.on('order:delivered', (order) => {
   removeOrder(order.id);
   loadSummary().catch(() => {});
 });
+
+const savedTheme = localStorage.getItem('motoboy-theme');
+if (savedTheme === 'light') {
+  state.darkMode = false;
+}
+applyTheme();
 
 loadOrders().catch((error) => console.error(error));
 loadSummary().catch((error) => console.error(error));

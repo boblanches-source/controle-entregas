@@ -5,34 +5,48 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Motoboy | Entregas</title>
   <script>
-  window.API_BASE = 'https://controle-entregas-owfe.onrender.com';
-</script>
+    window.API_BASE = 'https://controle-entregas-owfe.onrender.com';
+  </script>
   <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
   <style>
     :root {
-      --bg: #050816;
+      --bg: #ffffff;
+      --panel: #ffffff;
+      --card: #ffffff;
+      --line: #e5e7eb;
+      --text: #0f172a;
+      --muted: #64748b;
+      --accent: #2563eb;
+      --success: #16a34a;
+      --warn: #d97706;
+      --danger: #ef4444;
+      --radius: 18px;
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(180deg, #ffffff, #f8fafc);
+      color: var(--text);
+    }
+
+    body.dark {
+      background: linear-gradient(180deg, #020617, #0f172a);
+      color: #e5e7eb;
+      --bg: #020617;
       --panel: #0f172a;
       --card: #111827;
       --line: #263244;
       --text: #e5e7eb;
       --muted: #94a3b8;
-      --accent: #38bdf8;
-      --success: #22c55e;
-      --warn: #f59e0b;
-      --danger: #ef4444;
-      --radius: 18px;
-    }
-
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Arial, Helvetica, sans-serif;
-      background: linear-gradient(180deg, #020617, #0f172a);
-      color: var(--text);
+      --shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
     }
 
     .app {
-      max-width: 760px;
+      max-width: 860px;
       margin: 0 auto;
       padding: 16px;
     }
@@ -64,18 +78,26 @@
       font-size: 12px;
       font-weight: 700;
       white-space: nowrap;
+      border: 1px solid var(--line);
+      background: #fff;
     }
 
-    .online { background: rgba(34, 197, 94, .14); color: #86efac; }
-    .offline { background: rgba(239, 68, 68, .14); color: #fca5a5; }
+    body.dark .badge {
+      background: #111827;
+    }
+
+    .online { background: rgba(34, 197, 94, .14); color: #15803d; }
+    .offline { background: rgba(239, 68, 68, .14); color: #b91c1c; }
+    body.dark .online { color: #86efac; }
+    body.dark .offline { color: #fca5a5; }
 
     .panel {
-      background: rgba(15, 23, 42, .96);
-      border: 1px solid rgba(148, 163, 184, .14);
+      background: var(--panel);
+      border: 1px solid var(--line);
       border-radius: var(--radius);
       padding: 14px;
       margin-bottom: 14px;
-      box-shadow: 0 10px 30px rgba(0,0,0,.22);
+      box-shadow: var(--shadow);
     }
 
     .panel-head {
@@ -84,6 +106,7 @@
       align-items: center;
       gap: 10px;
       margin-bottom: 12px;
+      flex-wrap: wrap;
     }
 
     .panel h2 {
@@ -95,15 +118,15 @@
       border: 0;
       border-radius: 14px;
       padding: 12px 14px;
-      font-weight: 700;
+      font-weight: 800;
       cursor: pointer;
       color: white;
-      background: linear-gradient(90deg, #2563eb, #22c55e);
+      background: linear-gradient(90deg, #2563eb, #0ea5e9);
       width: 100%;
     }
 
     .btn.secondary {
-      background: #334155;
+      background: #64748b;
     }
 
     .btn.success {
@@ -114,16 +137,35 @@
       background: #d97706;
     }
 
+    .btn.danger {
+      background: #dc2626;
+    }
+
     .orders {
       display: grid;
       gap: 12px;
     }
 
     .order-card {
-      background: rgba(17, 24, 39, .95);
-      border: 1px solid rgba(148, 163, 184, .12);
+      background: var(--card);
+      border: 1px solid var(--line);
       border-radius: 16px;
       padding: 14px;
+      border-left: 8px solid transparent;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+    }
+
+    .order-card.status-aguardando {
+      border-left-color: #d97706;
+    }
+
+    .order-card.status-em_rota {
+      border-left-color: #2563eb;
+    }
+
+    .order-card.status-entregue {
+      border-left-color: #16a34a;
+      opacity: 0.95;
     }
 
     .order-head {
@@ -136,14 +178,14 @@
 
     .customer {
       font-size: 18px;
-      font-weight: 800;
+      font-weight: 900;
       margin-bottom: 4px;
     }
 
     .meta {
       color: var(--muted);
       font-size: 13px;
-      line-height: 1.55;
+      line-height: 1.65;
     }
 
     .actions {
@@ -158,14 +200,38 @@
       margin-top: 10px;
     }
 
+    .cash-box {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      border: 1px dashed var(--line);
+      border-radius: 14px;
+      background: rgba(248, 250, 252, 0.9);
+    }
+
+    body.dark .cash-box {
+      background: rgba(2, 6, 23, 0.45);
+    }
+
+    .cash-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
     select, input {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 12px;
-      background: #020617;
+      background: #fff;
       color: var(--text);
       padding: 12px 14px;
       font-size: 15px;
+    }
+
+    body.dark select,
+    body.dark input {
+      background: #020617;
     }
 
     .summary-grid {
@@ -175,10 +241,14 @@
     }
 
     .summary-box {
-      background: rgba(2, 6, 23, .7);
-      border: 1px solid rgba(148, 163, 184, .12);
+      background: rgba(248, 250, 252, 0.9);
+      border: 1px solid var(--line);
       border-radius: 14px;
       padding: 12px;
+    }
+
+    body.dark .summary-box {
+      background: rgba(2, 6, 23, .7);
     }
 
     .summary-box .label {
@@ -189,30 +259,115 @@
 
     .summary-box .value {
       font-size: 20px;
-      font-weight: 800;
+      font-weight: 900;
     }
 
     .empty {
-      border: 1px dashed rgba(148, 163, 184, .28);
+      border: 1px dashed var(--line);
       border-radius: 16px;
       padding: 18px;
       color: var(--muted);
       text-align: center;
+      background: rgba(248, 250, 252, .85);
     }
 
-    @media (max-width: 700px) {
-      .summary-grid {
-        grid-template-columns: repeat(2, 1fr);
+    body.dark .empty {
+      background: rgba(2, 6, 23, .45);
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 7px 10px;
+      font-size: 12px;
+      font-weight: 700;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+    }
+
+    .pill.warn { background: #fffbeb; color: #a16207; }
+    .pill.blue { background: #eff6ff; color: #1d4ed8; }
+    .pill.green { background: #f0fdf4; color: #15803d; }
+
+    .receipt {
+      display: none;
+    }
+
+    .theme-toggle {
+      width: auto;
+      padding: 10px 12px;
+      background: #334155;
+    }
+
+    @media (max-width: 720px) {
+      .summary-grid,
+      .cash-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media print {
+      @page {
+        size: 58mm auto;
+        margin: 2mm;
+      }
+
+      body {
+        background: #fff !important;
+        color: #000 !important;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      .receipt {
+        display: block !important;
+        width: 58mm;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 10pt;
+        color: #000;
+      }
+
+      .receipt h1 {
+        font-size: 12pt;
+        margin: 0 0 6px;
+        text-align: center;
+      }
+
+      .receipt .line {
+        border-top: 1px dashed #000;
+        margin: 6px 0;
+      }
+
+      .receipt .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        margin: 2px 0;
+      }
+
+      .receipt .muted {
+        font-size: 9pt;
       }
     }
   </style>
 </head>
 <body>
-  <main class="app">
+  <main class="app no-print">
     <div class="topbar">
       <div>
         <h1>App do Motoboy</h1>
-        <p class="sub">Recebimento de pedidos, início da rota e confirmação da entrega.</p>
+        <p class="sub">Recebimento de pedidos, início da rota, entrega e impressão 58mm.</p>
       </div>
       <div id="connectionStatus" class="badge offline">Conectando...</div>
     </div>
@@ -220,7 +375,8 @@
     <section class="panel">
       <div class="panel-head">
         <h2>Pedidos em tempo real</h2>
-        <button id="toggleSummaryBtn" class="btn secondary" style="width:auto; padding:10px 12px;">Resumo do Turno</button>
+        <button id="themeToggleBtn" class="btn theme-toggle" style="width:auto;">Modo escuro</button>
+        <button id="toggleSummaryBtn" class="btn secondary" style="width:auto;">Resumo do Turno</button>
       </div>
 
       <div id="summaryPanel" class="inline" style="display:none;">
@@ -248,12 +404,30 @@
     <section class="panel">
       <div class="panel-head">
         <h2>Pedidos Ativos</h2>
-        <button id="refreshBtn" class="btn secondary" style="width:auto; padding:10px 12px;">Atualizar</button>
+        <button id="refreshBtn" class="btn secondary" style="width:auto;">Atualizar</button>
       </div>
 
       <div id="ordersContainer" class="orders"></div>
     </section>
   </main>
+
+  <template id="receiptTemplate">
+    <div class="receipt">
+      <h1>Bob Lanches</h1>
+      <div class="muted" style="text-align:center;">Comprovante de Entrega</div>
+      <div class="line"></div>
+      <div class="row"><strong>Pedido</strong><span id="r-id"></span></div>
+      <div class="row"><strong>Cliente</strong><span id="r-customer"></span></div>
+      <div class="row"><strong>Pagamento</strong><span id="r-payment"></span></div>
+      <div class="row"><strong>Bebida</strong><span id="r-drink"></span></div>
+      <div class="row"><strong>Hora entrega</strong><span id="r-time"></span></div>
+      <div class="line"></div>
+      <div class="row"><strong>Recebido</strong><span id="r-received"></span></div>
+      <div class="row"><strong>Troco</strong><span id="r-change"></span></div>
+      <div class="line"></div>
+      <div class="muted" style="text-align:center;">Obrigado e volte sempre!</div>
+    </div>
+  </template>
 
   <script src="./app.js"></script>
 </body>
