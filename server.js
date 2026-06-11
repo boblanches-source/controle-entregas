@@ -45,6 +45,12 @@ function isValidPaymentMethod(value) {
   return PAYMENT_METHODS.includes(value);
 }
 
+function normalizeMoney(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
 async function getOrderById(id) {
   return db('orders').where({ id }).first();
 }
@@ -126,7 +132,15 @@ app.get('/api/summary/today', async (req, res) => {
 
 app.post('/api/orders', async (req, res) => {
   try {
-    const { customer_name, initial_payment_method, has_drink } = req.body;
+    const {
+      customer_name,
+      order_value,
+      initial_payment_method,
+      has_drink,
+      paid_at_counter,
+      needs_change,
+      observations,
+    } = req.body;
 
     if (!customer_name || !customer_name.trim()) {
       return res.status(400).json({ error: 'Nome do cliente é obrigatório.' });
@@ -136,12 +150,23 @@ app.post('/api/orders', async (req, res) => {
       return res.status(400).json({ error: 'Forma de pagamento inicial inválida.' });
     }
 
+    const normalizedValue = normalizeMoney(order_value);
+    if (normalizedValue === null) {
+      return res.status(400).json({ error: 'Valor do pedido inválido.' });
+    }
+
     const payload = {
       customer_name: customer_name.trim(),
+      order_value: normalizedValue,
       initial_payment_method,
       has_drink: Boolean(has_drink),
+      paid_at_counter: Boolean(paid_at_counter),
+      needs_change: Boolean(needs_change) && initial_payment_method === 'Dinheiro' && !Boolean(paid_at_counter),
+      observations: String(observations || '').trim() || null,
       status: STATUS.WAITING,
       final_payment_method: null,
+      cash_received: null,
+      cash_change: null,
       delivered_at: null,
       created_at: db.fn.now(),
       updated_at: db.fn.now(),
@@ -156,6 +181,75 @@ app.post('/api/orders', async (req, res) => {
     return res.status(201).json(order);
   } catch (error) {
     return res.status(500).json({ error: 'Erro ao criar pedido.' });
+  }
+});
+
+app.patch('/api/orders/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const order = await getOrderById(id);
+
+    if (!order) {
+      return res.status(404).json({ error: 'Pedido não encontrado.' });
+    }
+
+    if (order.status !== STATUS.WAITING) {
+      return res.status(400).json({ error: 'Esse pedido já saiu para a rota e não pode mais ser editado.' });
+    }
+
+    const {
+      customer_name,
+      order_value,
+      initial_payment_method,
+      has_drink,
+      paid_at_counter,
+      needs_change,
+      observations,
+    } = req.body;
+
+    const updates = {};
+    if (customer_name !== undefined) {
+      if (!String(customer_name).trim()) {
+        return res.status(400).json({ error: 'Nome do cliente é obrigatório.' });
+      }
+      updates.customer_name = String(customer_name).trim();
+    }
+
+    if (order_value !== undefined) {
+      const normalizedValue = normalizeMoney(order_value);
+      if (normalizedValue === null) {
+        return res.status(400).json({ error: 'Valor do pedido inválido.' });
+      }
+      updates.order_value = normalizedValue;
+    }
+
+    if (initial_payment_method !== undefined) {
+      if (!isValidPaymentMethod(initial_payment_method)) {
+        return res.status(400).json({ error: 'Forma de pagamento inicial inválida.' });
+      }
+      updates.initial_payment_method = initial_payment_method;
+    }
+
+    if (has_drink !== undefined) updates.has_drink = Boolean(has_drink);
+    if (paid_at_counter !== undefined) updates.paid_at_counter = Boolean(paid_at_counter);
+    if (needs_change !== undefined) updates.needs_change = Boolean(needs_change);
+    if (observations !== undefined) updates.observations = String(observations || '').trim() || null;
+
+    if (updates.paid_at_counter === true || updates.initial_payment_method !== 'Dinheiro') {
+      updates.needs_change = false;
+    }
+
+    updates.updated_at = db.fn.now();
+
+    await db('orders').where({ id }).update(updates);
+    const updated = await getOrderById(id);
+
+    io.emit('order:updated', updated);
+    await emitSync();
+
+    return res.json(updated);
+  } catch (error) {
+    return res.status(500).json({ error: 'Erro ao atualizar pedido.' });
   }
 });
 
@@ -192,7 +286,7 @@ app.patch('/api/orders/:id/start', async (req, res) => {
 app.patch('/api/orders/:id/finish', async (req, res) => {
   try {
     const { id } = req.params;
-    const { final_payment_method } = req.body;
+    const { final_payment_method, cash_received, cash_change } = req.body;
 
     if (!isValidPaymentMethod(final_payment_method)) {
       return res.status(400).json({ error: 'Forma de pagamento final inválida.' });
@@ -209,6 +303,8 @@ app.patch('/api/orders/:id/finish', async (req, res) => {
       .update({
         status: STATUS.DELIVERED,
         final_payment_method,
+        cash_received: normalizeMoney(cash_received),
+        cash_change: normalizeMoney(cash_change),
         delivered_at: db.fn.now(),
         updated_at: db.fn.now(),
       });

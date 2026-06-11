@@ -335,10 +335,10 @@ function renderCard(order) {
   const orderMethod = slugify(order.initial_payment_method);
   const paidAtCounter = Boolean(order.paid_at_counter);
   const deliveredAt = order.delivered_at ? formatDateTime(order.delivered_at) : '-';
-  const methodBadge = paidAtCounter ? '<span class="pill green">Pago</span>' : '<span class="pill warn">Pagar na entrega</span>';
+  const methodBadge = paidAtCounter ? '<span class="pill green">Pago no balcão</span>' : '<span class="pill warn">Pagar na entrega</span>';
   const drinkBadge = order.has_drink ? '<span class="pill blue">Com bebida</span>' : '<span class="pill gray">Sem bebida</span>';
   const changeBadge = order.initial_payment_method === 'Dinheiro'
-    ? `<span class="pill ${order.needs_change ? 'warn' : 'gray'}">${order.needs_change ? 'Com troco' : 'Sem troco'}</span>`
+    ? `<span class="pill ${order.needs_change ? 'warn' : 'gray'}">${order.needs_change ? 'Troco necessário' : 'Sem troco'}</span>`
     : '';
   const paymentBadge = `<span class="pill ${paidAtCounter ? 'green' : 'purple'}">${paidAtCounter ? 'Pago no balcão' : 'Na entrega'}</span>`;
   const valueText = formatMoney(order.order_value || 0);
@@ -352,9 +352,9 @@ function renderCard(order) {
           <div class="meta">
             Valor: <strong>${valueText}</strong><br />
             Pagamento: <strong>${paymentLabel(order.initial_payment_method)}</strong><br />
-            ${order.paid_at_counter ? 'Situação: <strong>Pago no balcão</strong><br />' : 'Situação: <strong>Vai pagar na entrega</strong><br />'}
+            ${order.paid_at_counter ? 'Situação do pagamento: <strong>Pago no balcão</strong><br />' : 'Situação do pagamento: <strong>Pagar na entrega</strong><br />'}
             Bebida: <strong>${drinkLabel(order.has_drink)}</strong><br />
-            Troco: <strong>${needsChangeLabel(order.needs_change)}</strong><br />
+            Troco necessário: <strong>${needsChangeLabel(order.needs_change)}</strong><br />
             Status: <strong>${statusLabel(order.status)}</strong><br />
             ${order.final_payment_method ? `Pagamento final: <strong>${paymentLabel(order.final_payment_method)}</strong><br />` : ''}
             ${order.final_payment_method === 'Dinheiro' && order.cash_received != null ? `Recebido: <strong>${formatMoney(order.cash_received)}</strong><br />` : ''}

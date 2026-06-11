@@ -46,7 +46,7 @@
     }
 
     .app {
-      max-width: 900px;
+      max-width: 980px;
       margin: 0 auto;
       padding: 16px;
     }
@@ -77,7 +77,7 @@
       border-radius: 999px;
       padding: 7px 10px;
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 800;
       white-space: nowrap;
       border: 1px solid var(--line);
       background: #fff;
@@ -129,7 +129,7 @@
     .btn.secondary { background: #64748b; }
     .btn.success { background: #16a34a; }
     .btn.warn { background: #d97706; }
-    .btn.danger { background: #dc2626; }
+    .btn.edit { background: linear-gradient(90deg, #7c3aed, #8b5cf6); }
 
     .orders {
       display: grid;
@@ -188,11 +188,11 @@
 
     .inline {
       display: grid;
-      gap: 8px;
+      gap: 10px;
       margin-top: 10px;
     }
 
-    .cash-box {
+    .cash-box, .edit-box {
       display: grid;
       gap: 10px;
       padding: 12px;
@@ -201,17 +201,26 @@
       background: rgba(248, 250, 252, 0.9);
     }
 
-    body.dark .cash-box {
+    body.dark .cash-box,
+    body.dark .edit-box {
       background: rgba(2, 6, 23, 0.45);
     }
 
-    .cash-grid {
+    .cash-grid, .edit-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
     }
 
-    select, input {
+    .field label {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    select, input, textarea {
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 12px;
@@ -221,15 +230,62 @@
       font-size: 15px;
     }
 
+    textarea {
+      min-height: 88px;
+      resize: vertical;
+    }
+
     body.dark select,
-    body.dark input {
+    body.dark input,
+    body.dark textarea {
       background: #020617;
+    }
+
+    .choice-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .choice {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 11px 12px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #f8fafc;
+      cursor: pointer;
+      user-select: none;
+      transition: all .12s ease;
+      font-weight: 700;
+    }
+
+    .choice input {
+      width: 18px;
+      height: 18px;
+      margin: 0;
+      flex: 0 0 auto;
+    }
+
+    .choice.is-selected {
+      border-color: transparent;
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
+    }
+
+    .choice.green.is-selected { background: #ecfdf5; color: #166534; }
+    .choice.orange.is-selected { background: #fff7ed; color: #9a3412; }
+    .choice.blue.is-selected { background: #eff6ff; color: #1d4ed8; }
+    .choice.purple.is-selected { background: #f5f3ff; color: #6b21a8; }
+
+    body.dark .choice {
+      background: rgba(2, 6, 23, 0.45);
+      color: #e5e7eb;
     }
 
     .summary-note {
       font-size: 13px;
       color: var(--muted);
-      margin-top: 6px;
+      line-height: 1.45;
     }
 
     .empty {
@@ -292,13 +348,51 @@
       background: #334155;
     }
 
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .summary-box {
+      background: rgba(248, 250, 252, 0.9);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px;
+    }
+
+    body.dark .summary-box {
+      background: rgba(2, 6, 23, .7);
+    }
+
+    .summary-box .label {
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+
+    .summary-box .value {
+      font-size: 20px;
+      font-weight: 900;
+    }
+
     .receipt {
       display: none;
     }
 
     @media (max-width: 720px) {
-      .cash-grid {
+      .summary-grid,
+      .cash-grid,
+      .edit-grid {
         grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .summary-grid,
+      .cash-grid,
+      .edit-grid {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -341,6 +435,7 @@
         justify-content: space-between;
         gap: 8px;
         margin: 2px 0;
+        break-inside: avoid;
       }
 
       .receipt .muted {
@@ -354,7 +449,7 @@
     <div class="topbar">
       <div>
         <h1>App do Motoboy</h1>
-        <p class="sub">Recebimento de pedidos, início da rota, entrega e impressão 58mm.</p>
+        <p class="sub">Pedidos em tempo real. Edição liberada só enquanto estiver aguardando saída.</p>
       </div>
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <button id="themeToggleBtn" class="btn theme-toggle" style="width:auto;">Modo escuro</button>
@@ -365,28 +460,40 @@
     <section class="panel">
       <div class="panel-head">
         <h2>Pedidos em tempo real</h2>
+        <button id="toggleSummaryBtn" class="btn secondary" style="width:auto; padding:10px 12px;">Resumo do Turno</button>
+      </div>
+
+      <div id="summaryPanel" class="inline" style="display:none;">
+        <div class="summary-grid">
+          <div class="summary-box">
+            <div class="label">Total entregas</div>
+            <div id="sumTotal" class="value">0</div>
+          </div>
+          <div class="summary-box">
+            <div class="label">Dinheiro</div>
+            <div id="sumDinheiro" class="value">0</div>
+          </div>
+          <div class="summary-box">
+            <div class="label">Cartão</div>
+            <div id="sumCartao" class="value">0</div>
+          </div>
+          <div class="summary-box">
+            <div class="label">Pix</div>
+            <div id="sumPix" class="value">0</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Pedidos Ativos</h2>
         <button id="refreshBtn" class="btn secondary" style="width:auto; padding:10px 12px;">Atualizar</button>
       </div>
+
       <div id="ordersContainer" class="orders"></div>
     </section>
   </main>
-
-  <template id="receiptTemplate">
-    <div class="receipt">
-      <h1>Bob Lanches</h1>
-      <div class="muted" style="text-align:center;">Comprovante de Entrega</div>
-      <div class="line"></div>
-      <div class="row"><strong>Pedido</strong><span id="r-id"></span></div>
-      <div class="row"><strong>Cliente</strong><span id="r-customer"></span></div>
-      <div class="row"><strong>Pagamento</strong><span id="r-payment"></span></div>
-      <div class="row"><strong>Valor</strong><span id="r-value"></span></div>
-      <div class="row"><strong>Hora entrega</strong><span id="r-time"></span></div>
-      <div class="row"><strong>Recebido</strong><span id="r-received"></span></div>
-      <div class="row"><strong>Troco</strong><span id="r-change"></span></div>
-      <div class="line"></div>
-      <div class="muted" style="text-align:center;">Obrigado e volte sempre!</div>
-    </div>
-  </template>
 
   <script src="./app.js"></script>
 </body>
