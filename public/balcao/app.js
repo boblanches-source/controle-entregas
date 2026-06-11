@@ -1,39 +1,21 @@
-const API_BASE = window.API_BASE || 'https://controle-entregas-owfe.onrender.com';
+const API_BASE = 'https://controle-entregas-owfe.onrender.com';
 const socket = io(API_BASE, { transports: ['websocket', 'polling'] });
 
 const state = {
   orders: [],
-  summary: null,
+  initialSyncDone: false,
 };
 
 const orderForm = document.getElementById('orderForm');
 const ordersContainer = document.getElementById('ordersContainer');
 const connectionStatus = document.getElementById('connectionStatus');
-const ordersCount = document.getElementById('ordersCount');
-
-const initialPaymentMethod = document.getElementById('initial_payment_method');
-const cashOptions = document.getElementById('cashOptions');
-const refreshSummaryBtn = document.getElementById('refreshSummaryBtn');
+const paymentMethodSelect = document.getElementById('initial_payment_method');
+const cashChangeBox = document.getElementById('cashChangeBox');
+const paidAtCounterGroup = document.getElementById('paidAtCounterGroup');
+const needsChangeGroup = document.getElementById('needsChangeGroup');
+const summaryCards = document.getElementById('summaryCards');
 const printSummaryBtn = document.getElementById('printSummaryBtn');
-const printArea = document.getElementById('printArea');
-
-const sumTotalDeliveries = document.getElementById('sumTotalDeliveries');
-const sumTotalReceived = document.getElementById('sumTotalReceived');
-const sumCounterReceived = document.getElementById('sumCounterReceived');
-const sumDeliveryReceived = document.getElementById('sumDeliveryReceived');
-const sumMoney = document.getElementById('sumMoney');
-const sumCard = document.getElementById('sumCard');
-const sumPix = document.getElementById('sumPix');
-const sumChange = document.getElementById('sumChange');
-const summaryDetails = document.getElementById('summaryDetails');
-
-let audioContext = null;
-let lastKnownOrderIds = new Set();
-
-function formatMoney(value) {
-  const number = Number(value || 0);
-  return number.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
+const summaryPrintTemplate = document.getElementById('summaryPrintTemplate');
 
 function paymentLabel(value) {
   return value || '-';
@@ -42,42 +24,149 @@ function paymentLabel(value) {
 function statusLabel(status) {
   const map = {
     aguardando: 'Aguardando',
-    em_rota: 'Em rota',
+    em_rota: 'Em Rota',
     entregue: 'Entregue',
   };
   return map[status] || status;
 }
 
 function statusClass(status) {
-  if (status === 'em_rota') return 'route';
-  if (status === 'entregue') return 'done';
-  return 'waiting';
+  if (status === 'em_rota') return 'b-route';
+  if (status === 'entregue') return 'b-done';
+  return 'b-waiting';
 }
 
 function drinkLabel(value) {
   return value ? 'Sim' : 'Não';
 }
 
-function playNotificationSound() {
+function paidAtCounterLabel(value) {
+  return value ? 'Pago' : 'Na entrega';
+}
+
+function needsChangeLabel(value) {
+  return value ? 'Sim' : 'Não';
+}
+
+function formatMoney(value) {
+  if (value === null || value === undefined || value === '') return '-';
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '-';
+  return num.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function formatDateTime(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function slugify(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase();
+}
+
+function playNewOrderSound() {
   try {
-    if (!audioContext) {
-      audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    }
-    const ctx = audioContext;
-    const oscillator = ctx.createOscillator();
-    const gain = ctx.createGain();
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) return;
+
+    const audioContext = new AudioContextClass();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+
     oscillator.type = 'sine';
     oscillator.frequency.value = 880;
-    gain.gain.value = 0.001;
-    oscillator.connect(gain);
-    gain.connect(ctx.destination);
+    gainNode.gain.value = 0.0001;
+
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+
     oscillator.start();
-    gain.gain.exponentialRampToValueAtTime(0.18, ctx.currentTime + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-    oscillator.stop(ctx.currentTime + 0.4);
+
+    const now = audioContext.currentTime;
+    gainNode.gain.exponentialRampToValueAtTime(0.2, now + 0.02);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+    oscillator.stop(now + 0.2);
   } catch (error) {
-    console.warn('Som não disponível:', error);
+    console.warn('Não foi possível tocar o som de novo pedido.', error);
   }
+}
+
+function updateToggleGroups() {
+  document.querySelectorAll('.choice-grid').forEach((grid) => {
+    grid.querySelectorAll('label.choice').forEach((label) => {
+      const input = label.querySelector('input');
+      if (!input) return;
+      label.classList.toggle('is-selected', input.type === 'checkbox' ? input.checked : input.checked);
+    });
+  });
+}
+
+function syncCashBoxVisibility() {
+  const payment = paymentMethodSelect.value;
+  const paidAtCounter = document.querySelector('input[name="paid_at_counter"]:checked')?.value === '1';
+  cashChangeBox.style.display = payment === 'Dinheiro' && !paidAtCounter ? 'block' : 'none';
+}
+
+function getPaidAtCounter() {
+  return document.querySelector('input[name="paid_at_counter"]:checked')?.value === '1';
+}
+
+function getNeedsChange() {
+  return document.querySelector('input[name="needs_change"]:checked')?.value === 'sim';
+}
+
+function orderEffectiveMethod(order) {
+  return order.paid_at_counter ? order.initial_payment_method : order.final_payment_method;
+}
+
+function getSummary() {
+  const summary = {
+    total_orders: state.orders.length,
+    total_deliveries: 0,
+    total_received: 0,
+    paid_at_counter_count: 0,
+    pay_on_delivery_count: 0,
+    pending_count: 0,
+    Dinheiro: { count: 0, amount: 0 },
+    Cartão: { count: 0, amount: 0 },
+    Pix: { count: 0, amount: 0 },
+  };
+
+  for (const order of state.orders) {
+    const orderValue = Number(order.order_value || 0) || 0;
+    const paidAtCounter = Boolean(order.paid_at_counter);
+    const delivered = order.status === 'entregue';
+    const settled = paidAtCounter || delivered;
+    const method = orderEffectiveMethod(order);
+
+    if (paidAtCounter) summary.paid_at_counter_count += 1;
+    else summary.pay_on_delivery_count += 1;
+
+    if (delivered) summary.total_deliveries += 1;
+    if (!settled) summary.pending_count += 1;
+
+    if (settled) {
+      summary.total_received += orderValue;
+      if (summary[method]) {
+        summary[method].count += 1;
+        summary[method].amount += orderValue;
+      }
+    }
+  }
+
+  return summary;
 }
 
 function upsertOrder(order) {
@@ -93,6 +182,7 @@ function upsertOrder(order) {
 
 function setOrders(orders) {
   state.orders = [...orders].sort((a, b) => b.id - a.id);
+  state.initialSyncDone = true;
   render();
 }
 
@@ -101,69 +191,120 @@ async function loadOrders() {
   if (!response.ok) throw new Error('Falha ao carregar pedidos.');
   const orders = await response.json();
   setOrders(orders);
-  lastKnownOrderIds = new Set(state.orders.map((order) => order.id));
 }
 
-async function loadSummary() {
-  const response = await fetch(`${API_BASE}/api/summary/today`);
-  if (!response.ok) throw new Error('Falha ao carregar resumo.');
-  const summary = await response.json();
-  state.summary = summary;
-  renderSummary();
-}
-
-function formatSummaryNumber(value) {
-  return Number(value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function renderSummary() {
-  const summary = state.summary || {
-    total_deliveries: 0,
-    total_received: 0,
-    paid_at_counter_total: 0,
-    paid_on_delivery_total: 0,
-    total_change_given: 0,
-    Dinheiro: { count: 0, total: 0 },
-    Cartão: { count: 0, total: 0 },
-    Pix: { count: 0, total: 0 },
-    payment_breakdown: [],
-  };
-
-  sumTotalDeliveries.textContent = String(summary.total_deliveries || 0);
-  sumTotalReceived.textContent = formatMoney(summary.total_received || 0);
-  sumCounterReceived.textContent = formatMoney(summary.paid_at_counter_total || 0);
-  sumDeliveryReceived.textContent = formatMoney(summary.paid_on_delivery_total || 0);
-  sumMoney.textContent = `${summary.Dinheiro?.count || 0} pedidos · ${formatMoney(summary.Dinheiro?.total || 0)}`;
-  sumCard.textContent = `${summary.Cartão?.count || 0} pedidos · ${formatMoney(summary.Cartão?.total || 0)}`;
-  sumPix.textContent = `${summary.Pix?.count || 0} pedidos · ${formatMoney(summary.Pix?.total || 0)}`;
-  sumChange.textContent = formatMoney(summary.total_change_given || 0);
-
-  const lines = [
-    `Total de entregas: ${summary.total_deliveries || 0}`,
-    `Total recebido: ${formatMoney(summary.total_received || 0)}`,
-    `Pago no balcão: ${formatMoney(summary.paid_at_counter_total || 0)}`,
-    `Pago na entrega: ${formatMoney(summary.paid_on_delivery_total || 0)}`,
-    `Troco entregue: ${formatMoney(summary.total_change_given || 0)}`,
+function renderSummaryCards(summary) {
+  const cards = [
+    { label: 'Total pedidos', value: summary.total_orders, sub: 'Pedidos cadastrados' },
+    { label: 'Entregues', value: summary.total_deliveries, sub: 'Finalizados no turno' },
+    { label: 'Total recebido', value: formatMoney(summary.total_received), sub: 'Faturamento do turno' },
+    { label: 'Pago no balcão', value: summary.paid_at_counter_count, sub: 'Somente entregar' },
+    { label: 'Na entrega', value: summary.pay_on_delivery_count, sub: 'A cobrar do motoboy' },
+    { label: 'Pendentes', value: summary.pending_count, sub: 'Ainda em aberto' },
   ];
 
-  summaryDetails.innerHTML = lines
-    .map((line) => `<div class="summary-item"><span>${line.split(':')[0]}</span><strong>${line.split(':').slice(1).join(':').trim()}</strong></div>`)
+  summaryCards.innerHTML = cards
+    .map((card) => `
+      <div class="summary-card">
+        <div class="label">${card.label}</div>
+        <div class="value">${card.value}</div>
+        <div class="sub">${card.sub}</div>
+      </div>
+    `)
     .join('');
+}
+
+function renderSummaryForPrint(summary) {
+  const windowRef = window.open('', '_blank', 'width=380,height=700');
+  if (!windowRef) {
+    alert('O navegador bloqueou a impressão. Permita pop-ups para imprimir o resumo.');
+    return;
+  }
+
+  const html = `
+    <!doctype html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <title>Resumo 58mm</title>
+      <style>
+        @page { size: 58mm auto; margin: 2mm; }
+        body {
+          width: 58mm;
+          margin: 0;
+          padding: 0;
+          font-family: Arial, Helvetica, sans-serif;
+          color: #000;
+          font-size: 10pt;
+        }
+        .receipt { width: 58mm; padding: 2mm; box-sizing: border-box; }
+        h1 {
+          font-size: 12pt;
+          margin: 0 0 4px;
+          text-align: center;
+        }
+        .center { text-align: center; }
+        .line {
+          border-top: 1px dashed #000;
+          margin: 6px 0;
+        }
+        .row {
+          display: flex;
+          justify-content: space-between;
+          gap: 6px;
+          margin: 2px 0;
+          word-break: break-word;
+        }
+        .muted {
+          font-size: 9pt;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="receipt">
+        <h1>Bob Lanches</h1>
+        <div class="center muted">Resumo do Turno</div>
+        <div class="line"></div>
+        <div class="row"><strong>Total pedidos</strong><span>${summary.total_orders}</span></div>
+        <div class="row"><strong>Entregues</strong><span>${summary.total_deliveries}</span></div>
+        <div class="row"><strong>Total recebido</strong><span>${formatMoney(summary.total_received)}</span></div>
+        <div class="row"><strong>Pago no balcão</strong><span>${summary.paid_at_counter_count}</span></div>
+        <div class="row"><strong>Na entrega</strong><span>${summary.pay_on_delivery_count}</span></div>
+        <div class="line"></div>
+        <div class="row"><strong>Dinheiro</strong><span>${summary.Dinheiro.count} / ${formatMoney(summary.Dinheiro.amount)}</span></div>
+        <div class="row"><strong>Cartão</strong><span>${summary.Cartão.count} / ${formatMoney(summary.Cartão.amount)}</span></div>
+        <div class="row"><strong>Pix</strong><span>${summary.Pix.count} / ${formatMoney(summary.Pix.amount)}</span></div>
+        <div class="line"></div>
+        <div class="center muted">Fechado em tempo real</div>
+      </div>
+      <script>
+        window.onload = function () {
+          setTimeout(function () {
+            window.print();
+          }, 250);
+        };
+      </script>
+    </body>
+    </html>
+  `;
+
+  windowRef.document.open();
+  windowRef.document.write(html);
+  windowRef.document.close();
 }
 
 function render() {
   const activeOrders = state.orders.filter((order) => order.status !== 'entregue');
   const doneOrders = state.orders.filter((order) => order.status === 'entregue');
 
-  ordersCount.textContent = `${state.orders.length} pedidos (${activeOrders.length} ativos)`;
-
   const activeHtml = activeOrders.length
     ? activeOrders.map(renderCard).join('')
     : `<div class="empty">Nenhum pedido em andamento.</div>`;
 
   const doneHtml = doneOrders.length
-    ? doneOrders.slice(0, 8).map(renderCard).join('')
-    : '';
+    ? doneOrders.map(renderCard).join('')
+    : `<div class="empty">Nenhum pedido concluído hoje.</div>`;
 
   ordersContainer.innerHTML = `
     <div>
@@ -179,191 +320,121 @@ function render() {
         <strong>Concluídos hoje</strong>
         <span>${doneOrders.length} pedido(s)</span>
       </div>
-      <div class="orders">${doneHtml || '<div class="empty">Nenhum pedido concluído hoje.</div>'}</div>
+      <div class="orders">${doneHtml}</div>
     </div>
   `;
+
+  const summary = getSummary();
+  renderSummaryCards(summary);
+  updateToggleGroups();
+  syncCashBoxVisibility();
 }
 
 function renderCard(order) {
+  const hasObservation = Boolean(order.observations && String(order.observations).trim());
+  const orderMethod = slugify(order.initial_payment_method);
+  const paidAtCounter = Boolean(order.paid_at_counter);
+  const deliveredAt = order.delivered_at ? formatDateTime(order.delivered_at) : '-';
+  const methodBadge = paidAtCounter ? '<span class="pill green">Pago</span>' : '<span class="pill warn">Pagar na entrega</span>';
+  const drinkBadge = order.has_drink ? '<span class="pill blue">Com bebida</span>' : '<span class="pill gray">Sem bebida</span>';
+  const changeBadge = order.initial_payment_method === 'Dinheiro'
+    ? `<span class="pill ${order.needs_change ? 'warn' : 'gray'}">${order.needs_change ? 'Com troco' : 'Sem troco'}</span>`
+    : '';
+  const paymentBadge = `<span class="pill ${paidAtCounter ? 'green' : 'purple'}">${paidAtCounter ? 'Pago no balcão' : 'Na entrega'}</span>`;
+  const valueText = formatMoney(order.order_value || 0);
+  const obs = hasObservation ? `<div class="order-notes"><strong>Observações:</strong> ${escapeHtml(order.observations)}</div>` : '';
+
   return `
-    <article class="order-card ${statusClass(order.status)}">
+    <article class="order-card ${paidAtCounter ? 'paid-true' : ''} status-${order.status} method-${orderMethod}">
       <div class="order-top">
         <div>
-          <div class="order-name">#${order.id} · ${order.customer_name}</div>
+          <div class="order-name">#${order.id} · ${escapeHtml(order.customer_name)}</div>
           <div class="meta">
-            Valor: <strong>${formatMoney(order.order_value)}</strong><br />
+            Valor: <strong>${valueText}</strong><br />
             Pagamento: <strong>${paymentLabel(order.initial_payment_method)}</strong><br />
-            Pago no balcão: <strong>${order.is_paid ? 'Sim' : 'Não'}</strong><br />
+            ${order.paid_at_counter ? 'Situação: <strong>Pago no balcão</strong><br />' : 'Situação: <strong>Vai pagar na entrega</strong><br />'}
             Bebida: <strong>${drinkLabel(order.has_drink)}</strong><br />
-            ${order.status === 'entregue' && order.delivered_at ? `Horário da entrega: <strong>${new Date(order.delivered_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</strong><br />` : ''}
+            Troco: <strong>${needsChangeLabel(order.needs_change)}</strong><br />
+            Status: <strong>${statusLabel(order.status)}</strong><br />
+            ${order.final_payment_method ? `Pagamento final: <strong>${paymentLabel(order.final_payment_method)}</strong><br />` : ''}
+            ${order.final_payment_method === 'Dinheiro' && order.cash_received != null ? `Recebido: <strong>${formatMoney(order.cash_received)}</strong><br />` : ''}
+            ${order.final_payment_method === 'Dinheiro' && order.cash_change != null ? `Troco entregue: <strong>${formatMoney(order.cash_change)}</strong><br />` : ''}
+            ${order.delivered_at ? `Hora da entrega: <strong>${deliveredAt}</strong><br />` : ''}
           </div>
         </div>
-
-        <div class="order-badges">
-          <span class="pill ${statusClass(order.status)}">${statusLabel(order.status)}</span>
-          ${order.is_paid ? '<span class="pill paid">PAGO</span>' : '<span class="pill">A RECEBER</span>'}
-          ${order.has_drink ? '<span class="pill drink">Bebida</span>' : ''}
-        </div>
+        <div class="badge ${statusClass(order.status)}">${statusLabel(order.status)}</div>
       </div>
 
-      ${order.observations ? `<div class="notes"><strong>Observações:</strong> ${escapeHtml(order.observations)}</div>` : ''}
-
-      <div class="actions">
-        ${
-          order.status === 'aguardando'
-            ? `<button class="btn-route" data-action="start" data-id="${order.id}">Iniciar rota</button>`
-            : ''
-        }
-
-        ${
-          order.status !== 'entregue'
-            ? `<button class="btn-finish" data-action="open-finish" data-id="${order.id}">Finalizar entrega</button>`
-            : ''
-        }
+      <div class="pill-row">
+        ${paymentBadge}
+        ${methodBadge}
+        ${drinkBadge}
+        ${changeBadge}
+        ${order.status === 'aguardando' ? '<span class="pill warn">Aguardando partida</span>' : ''}
+        ${order.status === 'em_rota' ? '<span class="pill blue">Em rota</span>' : ''}
+        ${order.status === 'entregue' ? '<span class="pill green">Entregue</span>' : ''}
       </div>
 
-      <div id="finish-box-${order.id}" class="finish-box" style="display:none;">
-        ${renderFinishBox(order)}
+      ${obs}
+
+      <div class="pill-row" style="margin-top:14px;">
+        ${paidAtCounter ? '<span class="pill green">Somente entregar</span>' : '<span class="pill purple">Conferir pagamento na entrega</span>'}
       </div>
     </article>
   `;
 }
 
-function renderFinishBox(order) {
-  if (order.is_paid) {
-    return `
-      <div class="hint" style="margin-bottom:10px;">Pedido já pago no balcão. O motoboy só precisa marcar como entregue.</div>
-      <button class="btn-finish" data-action="confirm-paid-finish" data-id="${order.id}">Marcar como entregue</button>
-      <button class="btn-cancel" data-action="cancel-finish" data-id="${order.id}" style="margin-top:8px;">Cancelar</button>
-    `;
-  }
+function handlePaymentModeVisibility() {
+  const payment = paymentMethodSelect.value;
+  const paidAtCounter = getPaidAtCounter();
+  cashChangeBox.style.display = payment === 'Dinheiro' && !paidAtCounter ? 'block' : 'none';
+  updateToggleGroups();
+}
 
-  return `
-    <div class="field">
-      <label for="payment-${order.id}" style="display:block; margin-bottom:6px; font-weight:700; color:#334155;">Forma de pagamento na entrega</label>
-      <select id="payment-${order.id}">
-        <option value="">Selecione</option>
-        <option>Dinheiro</option>
-        <option>Cartão</option>
-        <option>Pix</option>
-      </select>
-    </div>
+function parseMoneyInput(value) {
+  const cleaned = String(value || '')
+    .trim()
+    .replace(/\./g, '')
+    .replace(',', '.')
+    .replace(/[^\d.\-]/g, '');
 
-    <div id="cash-box-${order.id}" style="display:none;">
-      <div class="field">
-        <label for="cash-${order.id}" style="display:block; margin-bottom:6px; font-weight:700; color:#334155;">Quanto recebeu do cliente?</label>
-        <input id="cash-${order.id}" type="number" step="0.01" min="0" placeholder="Ex.: 50,00" />
-      </div>
-      <div class="hint">O sistema calcula o troco automaticamente.</div>
-    </div>
-
-    <div class="actions" style="margin-top:10px;">
-      <button class="btn-finish" data-action="confirm-finish" data-id="${order.id}">Confirmar entrega</button>
-      <button class="btn-cancel" data-action="cancel-finish" data-id="${order.id}">Cancelar</button>
-    </div>
-  `;
+  if (cleaned === '') return null;
+  const num = Number(cleaned);
+  return Number.isFinite(num) ? num : null;
 }
 
 function escapeHtml(text) {
-  return String(text)
+  return String(text ?? '')
     .replaceAll('&', '&amp;')
     .replaceAll('<', '&lt;')
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
+    .replaceAll("'", '&#039;');
 }
 
-function printSummary() {
-  const summary = state.summary || {
-    total_deliveries: 0,
-    total_received: 0,
-    paid_at_counter_total: 0,
-    paid_on_delivery_total: 0,
-    total_change_given: 0,
-    Dinheiro: { count: 0, total: 0 },
-    Cartão: { count: 0, total: 0 },
-    Pix: { count: 0, total: 0 },
-  };
-
-  const now = new Date();
-  const dateStr = now.toLocaleDateString('pt-BR');
-  const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-
-  const html = `
-    <!doctype html>
-    <html lang="pt-BR">
-    <head>
-      <meta charset="UTF-8">
-      <title>Resumo do Turno</title>
-      <style>
-        @page { size: 58mm auto; margin: 2mm; }
-        body { width: 58mm; margin: 0; font-family: Arial, Helvetica, sans-serif; color: #000; }
-        .ticket { width: 58mm; font-size: 10px; line-height: 1.35; }
-        h1 { font-size: 13px; text-align: center; margin: 0 0 6px; }
-        .center { text-align: center; }
-        .line { border-top: 1px dashed #000; margin: 6px 0; }
-        .row { display: flex; justify-content: space-between; gap: 8px; }
-        .muted { font-size: 9px; }
-        .section { margin: 6px 0; }
-      </style>
-    </head>
-    <body>
-      <div class="ticket">
-        <h1>BOB LANCHES</h1>
-        <div class="center">RESUMO DO TURNO</div>
-        <div class="center muted">${dateStr} · ${timeStr}</div>
-        <div class="line"></div>
-        <div class="row"><span>Total de entregas</span><strong>${summary.total_deliveries || 0}</strong></div>
-        <div class="row"><span>Total recebido</span><strong>${formatMoney(summary.total_received || 0)}</strong></div>
-        <div class="row"><span>Pago no balcão</span><strong>${formatMoney(summary.paid_at_counter_total || 0)}</strong></div>
-        <div class="row"><span>Pago na entrega</span><strong>${formatMoney(summary.paid_on_delivery_total || 0)}</strong></div>
-        <div class="row"><span>Troco entregue</span><strong>${formatMoney(summary.total_change_given || 0)}</strong></div>
-        <div class="line"></div>
-        <div class="section"><strong>Por forma de pagamento</strong></div>
-        <div class="row"><span>Dinheiro (${summary.Dinheiro?.count || 0})</span><strong>${formatMoney(summary.Dinheiro?.total || 0)}</strong></div>
-        <div class="row"><span>Cartão (${summary.Cartão?.count || 0})</span><strong>${formatMoney(summary.Cartão?.total || 0)}</strong></div>
-        <div class="row"><span>Pix (${summary.Pix?.count || 0})</span><strong>${formatMoney(summary.Pix?.total || 0)}</strong></div>
-        <div class="line"></div>
-        <div class="center muted">Controle do balcão</div>
-      </div>
-      <script>
-        window.onload = function() {
-          window.print();
-          setTimeout(function(){ window.close(); }, 300);
-        };
-      </script>
-    </body>
-    </html>
-  `;
-
-  const popup = window.open('', '_blank', 'width=480,height=720');
-  if (!popup) {
-    alert('Permita pop-ups para imprimir o resumo.');
-    return;
-  }
-  popup.document.open();
-  popup.document.write(html);
-  popup.document.close();
-}
-
-async function submitOrder(event) {
+orderForm.addEventListener('submit', async (event) => {
   event.preventDefault();
 
   const formData = new FormData(orderForm);
-  const initial_payment_method = String(formData.get('initial_payment_method') || '');
+  const paymentMethod = String(formData.get('initial_payment_method') || '');
+  const paidAtCounter = getPaidAtCounter();
+  const needsChange = paymentMethod === 'Dinheiro' && !paidAtCounter && getNeedsChange();
+
   const payload = {
     customer_name: String(formData.get('customer_name') || '').trim(),
-    order_value: Number(formData.get('order_value') || 0),
-    initial_payment_method,
-    is_paid: formData.get('is_paid') === 'on',
-    needs_change: formData.get('needs_change') === 'on' && initial_payment_method === 'Dinheiro',
+    order_value: String(formData.get('order_value') || '').trim(),
+    initial_payment_method: paymentMethod,
     has_drink: formData.get('has_drink') === 'on',
+    paid_at_counter: paidAtCounter,
+    needs_change: needsChange,
     observations: String(formData.get('observations') || '').trim(),
   };
 
   const response = await fetch(`${API_BASE}/api/orders`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify(payload),
   });
 
@@ -374,192 +445,46 @@ async function submitOrder(event) {
   }
 
   orderForm.reset();
-  cashOptions.style.display = 'none';
+  paymentMethodSelect.value = '';
+  document.querySelector('input[name="paid_at_counter"][value="0"]').checked = true;
+  document.querySelector('input[name="needs_change"][value="nao"]').checked = true;
+  handlePaymentModeVisibility();
   const order = await response.json();
   upsertOrder(order);
+});
+
+function onRadioChange() {
+  handlePaymentModeVisibility();
 }
 
-function renderSummaryFromState() {
-  renderSummary();
-}
+paymentMethodSelect.addEventListener('change', handlePaymentModeVisibility);
+document.querySelectorAll('input[name="paid_at_counter"]').forEach((input) => input.addEventListener('change', onRadioChange));
+document.querySelectorAll('input[name="needs_change"]').forEach((input) => input.addEventListener('change', updateToggleGroups));
+document.getElementById('has_drink').addEventListener('change', updateToggleGroups);
 
-function renderSummary() {
-  const summary = state.summary || {
-    total_deliveries: 0,
-    total_received: 0,
-    paid_at_counter_total: 0,
-    paid_on_delivery_total: 0,
-    total_change_given: 0,
-    Dinheiro: { count: 0, total: 0 },
-    Cartão: { count: 0, total: 0 },
-    Pix: { count: 0, total: 0 },
-  };
-
-  sumTotalDeliveries.textContent = String(summary.total_deliveries || 0);
-  sumTotalReceived.textContent = formatMoney(summary.total_received || 0);
-  sumCounterReceived.textContent = formatMoney(summary.paid_at_counter_total || 0);
-  sumDeliveryReceived.textContent = formatMoney(summary.paid_on_delivery_total || 0);
-  sumMoney.textContent = `${summary.Dinheiro?.count || 0} pedidos · ${formatMoney(summary.Dinheiro?.total || 0)}`;
-  sumCard.textContent = `${summary.Cartão?.count || 0} pedidos · ${formatMoney(summary.Cartão?.total || 0)}`;
-  sumPix.textContent = `${summary.Pix?.count || 0} pedidos · ${formatMoney(summary.Pix?.total || 0)}`;
-  sumChange.textContent = formatMoney(summary.total_change_given || 0);
-
-  summaryDetails.innerHTML = `
-    <div class="summary-item"><span>Total de entregas</span><strong>${summary.total_deliveries || 0}</strong></div>
-    <div class="summary-item"><span>Total recebido</span><strong>${formatMoney(summary.total_received || 0)}</strong></div>
-    <div class="summary-item"><span>Pago no balcão</span><strong>${formatMoney(summary.paid_at_counter_total || 0)}</strong></div>
-    <div class="summary-item"><span>Pago na entrega</span><strong>${formatMoney(summary.paid_on_delivery_total || 0)}</strong></div>
-    <div class="summary-item"><span>Troco entregue</span><strong>${formatMoney(summary.total_change_given || 0)}</strong></div>
-  `;
-}
-
-function initializeThemeAndEvents() {
-  initialPaymentMethod.addEventListener('change', () => {
-    cashOptions.style.display = initialPaymentMethod.value === 'Dinheiro' ? 'block' : 'none';
-    if (initialPaymentMethod.value !== 'Dinheiro') {
-      const needsChange = document.getElementById('needs_change');
-      if (needsChange) needsChange.checked = false;
-    }
-  });
-
-  orderForm.addEventListener('submit', submitOrder);
-
-  refreshSummaryBtn.addEventListener('click', async () => {
-    await loadSummary();
-  });
-
-  printSummaryBtn.addEventListener('click', () => {
-    printSummary();
-  });
-
-  ordersContainer.addEventListener('input', (event) => {
-    const select = event.target.closest('select[id^="payment-"]');
-    if (!select) return;
-    const orderId = Number(select.id.replace('payment-', ''));
-    const cashBox = document.getElementById(`cash-box-${orderId}`);
-    if (cashBox) {
-      cashBox.style.display = select.value === 'Dinheiro' ? 'block' : 'none';
-    }
-  });
-
-  ordersContainer.addEventListener('click', async (event) => {
-    const button = event.target.closest('button[data-action]');
-    if (!button) return;
-
-    const { action, id } = button.dataset;
-    const orderId = Number(id);
-
-    if (action === 'start') {
-      const response = await fetch(`${API_BASE}/api/orders/${orderId}/start`, { method: 'PATCH' });
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        alert(error.error || 'Não foi possível iniciar a rota.');
-        return;
-      }
-      const updated = await response.json();
-      upsertOrder(updated);
-      return;
-    }
-
-    if (action === 'open-finish') {
-      const box = document.getElementById(`finish-box-${orderId}`);
-      if (box) {
-        const isHidden = box.style.display === 'none' || !box.style.display;
-        box.style.display = isHidden ? 'block' : 'none';
-      }
-      return;
-    }
-
-    if (action === 'cancel-finish') {
-      const box = document.getElementById(`finish-box-${orderId}`);
-      if (box) box.style.display = 'none';
-      return;
-    }
-
-    if (action === 'confirm-paid-finish') {
-      const response = await fetch(`${API_BASE}/api/orders/${orderId}/finish`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        alert(error.error || 'Não foi possível finalizar a entrega.');
-        return;
-      }
-
-      const updated = await response.json();
-      upsertOrder(updated);
-      await loadSummary();
-      return;
-    }
-
-    if (action === 'confirm-finish') {
-      const select = document.getElementById(`payment-${orderId}`);
-      const final_payment_method = select ? select.value : '';
-
-      if (!final_payment_method) {
-        alert('Selecione a forma de pagamento final.');
-        return;
-      }
-
-      let cash_received = null;
-      if (final_payment_method === 'Dinheiro') {
-        const cashInput = document.getElementById(`cash-${orderId}`);
-        cash_received = Number(cashInput?.value || 0);
-        if (!cash_received || cash_received <= 0) {
-          alert('Informe quanto recebeu do cliente.');
-          return;
-        }
-      }
-
-      const response = await fetch(`${API_BASE}/api/orders/${orderId}/finish`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ final_payment_method, cash_received }),
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        alert(error.error || 'Não foi possível finalizar a entrega.');
-        return;
-      }
-
-      const updated = await response.json();
-      upsertOrder(updated);
-      await loadSummary();
-    }
-  });
-}
+printSummaryBtn.addEventListener('click', () => {
+  const summary = getSummary();
+  renderSummaryForPrint(summary);
+});
 
 socket.on('connect', () => {
   connectionStatus.textContent = 'Online';
-  connectionStatus.className = 'badge online';
+  connectionStatus.className = 'badge b-route';
   socket.emit('sync:request');
 });
 
 socket.on('disconnect', () => {
   connectionStatus.textContent = 'Offline';
-  connectionStatus.className = 'badge offline';
+  connectionStatus.className = 'badge b-done';
 });
 
 socket.on('sync:orders', ({ orders }) => {
-  const currentIds = new Set((orders || []).map((order) => order.id));
-  const isDifferent = currentIds.size !== lastKnownOrderIds.size || [...currentIds].some((id) => !lastKnownOrderIds.has(id));
   setOrders(orders || []);
-  lastKnownOrderIds = currentIds;
-  if (isDifferent && currentIds.size > lastKnownOrderIds.size) {
-    playNotificationSound();
-  }
 });
 
 socket.on('order:created', (order) => {
-  if (!lastKnownOrderIds.has(order.id)) {
-    playNotificationSound();
-  }
   upsertOrder(order);
-  lastKnownOrderIds.add(order.id);
+  if (state.initialSyncDone) playNewOrderSound();
 });
 
 socket.on('order:updated', (order) => {
@@ -568,8 +493,10 @@ socket.on('order:updated', (order) => {
 
 socket.on('order:delivered', (order) => {
   upsertOrder(order);
-  loadSummary().catch(() => {});
 });
 
-loadOrders().catch((error) => console.error(error));
-loadSummary().catch((error) => console.error(error));
+loadOrders().catch((error) => {
+  console.error(error);
+});
+handlePaymentModeVisibility();
+updateToggleGroups();

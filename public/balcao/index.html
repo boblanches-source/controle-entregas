@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Balcão | Controle de Entregas V3</title>
+  <title>Balcão | Controle de Entregas</title>
   <script>
     window.API_BASE = 'https://controle-entregas-owfe.onrender.com';
   </script>
@@ -11,33 +11,35 @@
   <style>
     :root {
       --bg: #ffffff;
-      --surface: #f8fafc;
-      --surface-2: #eef2ff;
+      --panel: #ffffff;
       --card: #ffffff;
-      --line: #dbe4f0;
+      --line: #e5e7eb;
       --text: #0f172a;
       --muted: #64748b;
       --accent: #2563eb;
-      --accent-2: #16a34a;
+      --success: #16a34a;
       --warning: #f59e0b;
       --danger: #ef4444;
-      --success: #22c55e;
-      --info: #0ea5e9;
-      --done: #94a3b8;
       --radius: 18px;
-      --shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+      --shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+      --waiting: #fffaf0;
+      --route: #eff6ff;
+      --done: #f0fdf4;
+      --paid: #ecfdf5;
+      --delivery: #fff7ed;
     }
 
     * { box-sizing: border-box; }
+
     body {
       margin: 0;
-      font-family: Inter, Arial, Helvetica, sans-serif;
-      background: linear-gradient(180deg, #fff, #f8fafc);
+      font-family: Arial, Helvetica, sans-serif;
+      background: linear-gradient(180deg, #ffffff, #f8fafc);
       color: var(--text);
     }
 
     .container {
-      max-width: 1320px;
+      max-width: 1400px;
       margin: 0 auto;
       padding: 24px;
     }
@@ -48,50 +50,36 @@
       align-items: center;
       gap: 16px;
       margin-bottom: 20px;
-      padding: 18px 20px;
-      border-radius: 24px;
-      background: #ffffff;
-      box-shadow: var(--shadow);
-      border: 1px solid var(--line);
+      flex-wrap: wrap;
     }
 
     .title h1 {
       margin: 0;
-      font-size: 30px;
-      line-height: 1.1;
-      color: #0f172a;
+      font-size: 28px;
     }
 
     .title p {
-      margin: 8px 0 0;
+      margin: 6px 0 0;
       color: var(--muted);
     }
 
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      border-radius: 999px;
-      padding: 8px 12px;
-      font-weight: 700;
-      font-size: 12px;
-      border: 1px solid var(--line);
-      background: #fff;
+    .header-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
     }
-
-    .online { background: #ecfdf5; color: #166534; border-color: #bbf7d0; }
-    .offline { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
 
     .grid {
       display: grid;
-      grid-template-columns: 400px 1fr;
-      gap: 18px;
+      grid-template-columns: 420px 1fr;
+      gap: 20px;
+      align-items: start;
     }
 
     .panel {
-      background: var(--card);
+      background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 24px;
+      border-radius: var(--radius);
       padding: 18px;
       box-shadow: var(--shadow);
     }
@@ -101,19 +89,31 @@
       font-size: 18px;
     }
 
-    .field { margin-bottom: 12px; }
+    .panel-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .field {
+      margin-bottom: 12px;
+    }
+
     .field label {
       display: block;
       margin-bottom: 6px;
       color: var(--muted);
       font-size: 14px;
-      font-weight: 600;
+      font-weight: 700;
     }
 
     input, select, textarea, button {
       width: 100%;
       border: 1px solid var(--line);
-      border-radius: 14px;
+      border-radius: 12px;
       background: #fff;
       color: var(--text);
       padding: 12px 14px;
@@ -121,292 +121,338 @@
       outline: none;
     }
 
-    textarea { min-height: 96px; resize: vertical; }
+    textarea {
+      min-height: 92px;
+      resize: vertical;
+    }
 
     input:focus, select:focus, textarea:focus {
       border-color: #60a5fa;
-      box-shadow: 0 0 0 3px rgba(96,165,250,.15);
+      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.15);
     }
 
-    .inline-row {
+    button {
+      cursor: pointer;
+      border: 0;
+      background: linear-gradient(90deg, #2563eb, #0ea5e9);
+      color: #fff;
+      font-weight: 800;
+      transition: transform .12s ease, opacity .12s ease;
+    }
+
+    button:hover { transform: translateY(-1px); }
+    button:active { transform: translateY(0); }
+
+    .btn-secondary {
+      background: #334155;
+    }
+
+    .btn-green {
+      background: linear-gradient(90deg, #16a34a, #22c55e);
+    }
+
+    .btn-orange {
+      background: linear-gradient(90deg, #ea580c, #f59e0b);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 800;
+      border: 1px solid var(--line);
+      background: #fff;
+      white-space: nowrap;
+    }
+
+    .b-waiting { color: #b45309; background: #fff7ed; }
+    .b-route { color: #1d4ed8; background: #eff6ff; }
+    .b-done { color: #15803d; background: #f0fdf4; }
+    .b-paid { color: #047857; background: #ecfdf5; }
+
+    .choice-grid {
       display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
+      gap: 10px;
     }
 
-    .checkline {
+    .choice {
       display: flex;
       align-items: center;
       gap: 10px;
-      margin: 8px 0 12px;
-      color: var(--text);
-      font-size: 14px;
-      padding: 10px 12px;
+      padding: 12px 14px;
       border: 1px solid var(--line);
       border-radius: 14px;
-      background: #fff;
+      background: #f8fafc;
+      cursor: pointer;
+      user-select: none;
+      transition: all .12s ease;
+      font-weight: 700;
     }
 
-    .checkline input {
+    .choice input {
       width: 18px;
       height: 18px;
       margin: 0;
       flex: 0 0 auto;
     }
 
-    .hint {
-      font-size: 12px;
-      color: var(--muted);
-      margin-top: 6px;
+    .choice.is-selected {
+      border-color: transparent;
+      box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08);
     }
 
-    .btn-primary {
-      cursor: pointer;
-      border: 0;
-      color: white;
-      background: linear-gradient(90deg, #2563eb, #0ea5e9);
-      font-weight: 800;
-      padding: 14px 16px;
-      border-radius: 16px;
+    .choice.green.is-selected {
+      background: #ecfdf5;
+      color: #166534;
     }
 
-    .section-title {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      margin: 4px 0 12px;
-      color: var(--muted);
-      font-size: 14px;
+    .choice.orange.is-selected {
+      background: #fff7ed;
+      color: #9a3412;
+    }
+
+    .choice.blue.is-selected {
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    .choice.purple.is-selected {
+      background: #f5f3ff;
+      color: #6b21a8;
     }
 
     .summary-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 12px;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 10px;
     }
 
-    .summary-box {
+    .summary-card {
       border: 1px solid var(--line);
-      border-radius: 18px;
-      background: linear-gradient(180deg, #fff, #f8fafc);
+      border-radius: 16px;
       padding: 14px;
+      background: linear-gradient(180deg, #ffffff, #f8fafc);
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
     }
 
-    .summary-box .label {
+    .summary-card .label {
       color: var(--muted);
       font-size: 12px;
       font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: .04em;
       margin-bottom: 8px;
     }
 
-    .summary-box .value {
-      font-size: 22px;
-      font-weight: 800;
-      color: #0f172a;
+    .summary-card .value {
+      font-size: 20px;
+      font-weight: 900;
+      line-height: 1.1;
     }
 
-    .summary-box.small .value {
-      font-size: 18px;
+    .summary-card .sub {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
     }
-
-    .summary-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 12px;
-      flex-wrap: wrap;
-    }
-
-    .summary-actions button {
-      width: auto;
-      border: 0;
-      padding: 11px 14px;
-      border-radius: 14px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
-    .btn-print { background: #0f172a; color: white; }
-    .btn-refresh { background: #e2e8f0; color: #0f172a; }
-    .btn-view { background: #dbeafe; color: #1d4ed8; }
 
     .orders {
       display: grid;
       gap: 14px;
     }
 
-    .order-card {
-      border-radius: 22px;
-      border: 1px solid var(--line);
-      padding: 16px;
-      background: #fff;
-      box-shadow: var(--shadow);
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin: 4px 0 12px;
+      color: var(--muted);
+      font-size: 14px;
+      gap: 10px;
+      flex-wrap: wrap;
     }
 
-    .order-card.waiting { border-left: 7px solid var(--warning); }
-    .order-card.route { border-left: 7px solid var(--info); }
-    .order-card.done { border-left: 7px solid var(--success); }
+    .order-card {
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+      background: var(--card);
+      border-left: 8px solid transparent;
+    }
+
+    .order-card.status-aguardando {
+      background: linear-gradient(180deg, #ffffff, #fffaf0);
+      border-left-color: #f59e0b;
+    }
+
+    .order-card.status-em_rota {
+      background: linear-gradient(180deg, #ffffff, #eff6ff);
+      border-left-color: #2563eb;
+    }
+
+    .order-card.status-entregue {
+      background: linear-gradient(180deg, #ffffff, #f0fdf4);
+      border-left-color: #16a34a;
+    }
+
+    .order-card.paid-true {
+      border-left-color: #16a34a;
+    }
+
+    .order-card.method-dinheiro {
+      background: linear-gradient(180deg, #ffffff, #fff7ed);
+    }
+
+    .order-card.method-cartao {
+      background: linear-gradient(180deg, #ffffff, #eff6ff);
+    }
+
+    .order-card.method-pix {
+      background: linear-gradient(180deg, #ffffff, #f5f3ff);
+    }
 
     .order-top {
       display: flex;
       justify-content: space-between;
       gap: 12px;
-      align-items: start;
+      align-items: flex-start;
     }
 
     .order-name {
-      font-size: 19px;
+      font-size: 18px;
       font-weight: 900;
       margin-bottom: 4px;
-      color: #0f172a;
     }
 
     .meta {
-      color: #334155;
+      color: var(--muted);
       font-size: 13px;
-      line-height: 1.6;
+      line-height: 1.65;
     }
 
-    .order-badges {
+    .pill-row {
       display: flex;
-      gap: 8px;
       flex-wrap: wrap;
-      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 12px;
     }
 
     .pill {
       display: inline-flex;
       align-items: center;
+      gap: 6px;
       border-radius: 999px;
       padding: 7px 10px;
       font-size: 12px;
       font-weight: 800;
-      border: 1px solid transparent;
-    }
-
-    .pill.waiting { background: #fffbeb; color: #92400e; border-color: #fde68a; }
-    .pill.route { background: #ecfeff; color: #155e75; border-color: #a5f3fc; }
-    .pill.done { background: #ecfdf5; color: #166534; border-color: #bbf7d0; }
-    .pill.paid { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
-    .pill.drink { background: #fefce8; color: #a16207; border-color: #fde68a; }
-
-    .notes {
-      margin-top: 12px;
-      padding: 12px 14px;
-      border-radius: 14px;
-      background: #f8fafc;
-      border: 1px solid var(--line);
-      color: #0f172a;
-      font-size: 14px;
-    }
-
-    .actions {
-      display: grid;
-      gap: 10px;
-      margin-top: 14px;
-    }
-
-    .actions button {
-      border: 0;
-      font-weight: 800;
-      cursor: pointer;
-    }
-
-    .btn-route { background: #0ea5e9; color: white; }
-    .btn-finish { background: #16a34a; color: white; }
-    .btn-cancel { background: #e2e8f0; color: #0f172a; }
-
-    .finish-box {
-      margin-top: 10px;
-      padding: 12px;
-      border-radius: 16px;
       background: #f8fafc;
       border: 1px solid var(--line);
     }
 
-    .finish-box .field { margin-bottom: 10px; }
+    .pill.warn { background: #fff7ed; color: #9a3412; }
+    .pill.blue { background: #eff6ff; color: #1d4ed8; }
+    .pill.green { background: #f0fdf4; color: #166534; }
+    .pill.gray { background: #f8fafc; color: #475569; }
+    .pill.purple { background: #f5f3ff; color: #6b21a8; }
 
     .empty {
       color: var(--muted);
-      border: 1px dashed #cbd5e1;
-      border-radius: 18px;
+      border: 1px dashed rgba(148, 163, 184, 0.5);
+      border-radius: 16px;
       padding: 18px;
       text-align: center;
       background: #fff;
     }
 
-    .summary-list {
-      margin-top: 12px;
-      display: grid;
-      gap: 10px;
-    }
-
-    .summary-item {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
+    .order-notes {
+      margin-top: 10px;
       padding: 10px 12px;
-      border-radius: 14px;
-      background: #fff;
+      border-radius: 12px;
+      background: #f8fafc;
       border: 1px solid var(--line);
-      font-size: 14px;
-      color: #0f172a;
+      color: #334155;
+      font-size: 13px;
+      line-height: 1.5;
     }
 
-    .summary-total {
-      font-weight: 900;
-      font-size: 18px;
-    }
-
-    .print-preview {
-      margin-top: 12px;
+    .summary-print {
       display: none;
     }
 
-    .print-ticket {
-      width: 58mm;
-      font-family: Arial, Helvetica, sans-serif;
-      color: #000;
-      font-size: 11px;
-      line-height: 1.35;
-    }
-
-    .print-ticket h3 {
-      margin: 0 0 8px;
-      text-align: center;
-      font-size: 14px;
-    }
-
-    .print-ticket .line {
-      border-top: 1px dashed #000;
-      margin: 6px 0;
-    }
-
-    @media (max-width: 1120px) {
-      .grid { grid-template-columns: 1fr; }
-      .summary-grid { grid-template-columns: repeat(2, 1fr); }
+    @media (max-width: 1100px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+      .summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
     }
 
     @media print {
-      body { background: white; }
-      .no-print { display: none !important; }
+      @page {
+        size: 58mm auto;
+        margin: 2mm;
+      }
+
+      body {
+        background: #fff !important;
+        color: #000 !important;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      .summary-print {
+        display: block !important;
+        width: 58mm;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: 10pt;
+        color: #000;
+      }
+
+      .summary-print h1 {
+        font-size: 12pt;
+        margin: 0 0 6px;
+        text-align: center;
+      }
+
+      .summary-print .line {
+        border-top: 1px dashed #000;
+        margin: 6px 0;
+      }
+
+      .summary-print .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        margin: 2px 0;
+        break-inside: avoid;
+      }
+
+      .summary-print .muted {
+        font-size: 9pt;
+      }
     }
   </style>
 </head>
 <body>
-  <main class="container">
-    <div class="header no-print">
+  <main class="container no-print">
+    <div class="header">
       <div class="title">
-        <h1>Balcão · Controle de Entregas V3</h1>
-        <p>Pedidos, observações, troco e resumo financeiro do turno.</p>
+        <h1>Balcão · Controle de Entregas</h1>
+        <p>Pedidos, pagamentos, observações e resumo financeiro do turno.</p>
       </div>
-      <div id="connectionStatus" class="badge offline">Conectando...</div>
+      <div class="header-actions">
+        <div class="badge b-route" id="connectionStatus">Conectando...</div>
+        <button id="printSummaryBtn" class="btn btn-green" style="width:auto; padding:10px 14px;">Imprimir Resumo 58mm</button>
+      </div>
     </div>
 
     <div class="grid">
-      <section class="panel no-print">
+      <section class="panel">
         <h2>Novo Pedido</h2>
 
         <form id="orderForm">
@@ -415,112 +461,101 @@
             <input id="customer_name" name="customer_name" type="text" placeholder="Ex.: João Silva" required />
           </div>
 
-          <div class="inline-row">
-            <div class="field">
-              <label for="order_value">Valor do pedido (R$)</label>
-              <input id="order_value" name="order_value" type="number" step="0.01" min="0" placeholder="Ex.: 42.50" required />
-            </div>
+          <div class="field">
+            <label for="order_value">Valor do Pedido</label>
+            <input id="order_value" name="order_value" type="number" step="0.01" min="0" placeholder="Ex.: 35,90" required />
+          </div>
 
-            <div class="field">
-              <label for="initial_payment_method">Forma de Pagamento</label>
-              <select id="initial_payment_method" name="initial_payment_method" required>
-                <option value="">Selecione</option>
-                <option>Dinheiro</option>
-                <option>Cartão</option>
-                <option>Pix</option>
-              </select>
+          <div class="field">
+            <label for="initial_payment_method">Forma de Pagamento</label>
+            <select id="initial_payment_method" name="initial_payment_method" required>
+              <option value="">Selecione</option>
+              <option>Dinheiro</option>
+              <option>Cartão</option>
+              <option>Pix</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label>Pagamento</label>
+            <div class="choice-grid" id="paidAtCounterGroup">
+              <label class="choice green" data-choice="paid-true">
+                <input type="radio" name="paid_at_counter" value="1" />
+                <span>Já está pago no balcão</span>
+              </label>
+              <label class="choice orange" data-choice="paid-false">
+                <input type="radio" name="paid_at_counter" value="0" checked />
+                <span>Vai pagar na entrega</span>
+              </label>
             </div>
           </div>
 
-          <div id="cashOptions" style="display:none;">
-            <div class="checkline">
-              <input id="needs_change" name="needs_change" type="checkbox" />
-              <label for="needs_change">Vai precisar de troco?</label>
+          <div id="cashChangeBox" style="display:none;" class="field">
+            <label>Se for dinheiro, vai precisar de troco?</label>
+            <div class="choice-grid" id="needsChangeGroup">
+              <label class="choice blue" data-choice="needs-true">
+                <input type="radio" name="needs_change" value="sim" />
+                <span>Sim, precisa de troco</span>
+              </label>
+              <label class="choice purple" data-choice="needs-false">
+                <input type="radio" name="needs_change" value="nao" checked />
+                <span>Não precisa de troco</span>
+              </label>
             </div>
-            <div class="hint">O motoboy vai ver essa informação na entrega.</div>
           </div>
 
-          <div class="checkline">
-            <input id="is_paid" name="is_paid" type="checkbox" />
-            <label for="is_paid">Já está pago no balcão</label>
-          </div>
-
-          <div class="checkline">
-            <input id="has_drink" name="has_drink" type="checkbox" />
-            <label for="has_drink">Contém bebida</label>
+          <div class="field">
+            <label for="has_drink">Contém bebida?</label>
+            <div class="choice-grid">
+              <label class="choice blue" data-choice="drink">
+                <input id="has_drink" name="has_drink" type="checkbox" />
+                <span>Sim, contém bebida</span>
+              </label>
+            </div>
           </div>
 
           <div class="field">
             <label for="observations">Observações do pedido</label>
-            <textarea id="observations" name="observations" placeholder="Ex.: entregar no portão azul, chamar no WhatsApp..."></textarea>
+            <textarea id="observations" name="observations" placeholder="Ex.: entregar no portão azul, referência da casa, observação de entrega..."></textarea>
           </div>
 
-          <button type="submit" class="btn-primary">Lançar Pedido</button>
+          <button type="submit">Lançar Pedido</button>
         </form>
       </section>
 
-      <section class="panel no-print">
-        <div class="section-title">
-          <h2 style="margin:0;">Resumo do Turno</h2>
-          <div class="summary-actions">
-            <button type="button" class="btn-refresh" id="refreshSummaryBtn">Atualizar resumo</button>
-            <button type="button" class="btn-print" id="printSummaryBtn">Imprimir resumo 58mm</button>
-          </div>
+      <section class="panel">
+        <div class="panel-head">
+          <h2>Resumo do Turno</h2>
+          <span class="badge b-paid" id="summaryUpdatedBadge">Atualizado em tempo real</span>
         </div>
-
-        <div class="summary-grid" id="summaryGrid">
-          <div class="summary-box">
-            <div class="label">Total de entregas</div>
-            <div class="value" id="sumTotalDeliveries">0</div>
-          </div>
-          <div class="summary-box">
-            <div class="label">Total recebido</div>
-            <div class="value" id="sumTotalReceived">R$ 0,00</div>
-          </div>
-          <div class="summary-box">
-            <div class="label">Pago no balcão</div>
-            <div class="value" id="sumCounterReceived">R$ 0,00</div>
-          </div>
-          <div class="summary-box">
-            <div class="label">Pago na entrega</div>
-            <div class="value" id="sumDeliveryReceived">R$ 0,00</div>
-          </div>
-          <div class="summary-box small">
-            <div class="label">Dinheiro</div>
-            <div class="value" id="sumMoney">0 pedidos</div>
-          </div>
-          <div class="summary-box small">
-            <div class="label">Cartão</div>
-            <div class="value" id="sumCard">0 pedidos</div>
-          </div>
-          <div class="summary-box small">
-            <div class="label">Pix</div>
-            <div class="value" id="sumPix">0 pedidos</div>
-          </div>
-          <div class="summary-box small">
-            <div class="label">Troco entregue</div>
-            <div class="value" id="sumChange">R$ 0,00</div>
-          </div>
-        </div>
-
-        <div class="summary-list" id="summaryDetails"></div>
+        <div class="summary-grid" id="summaryCards"></div>
       </section>
-    </div>
 
-    <div class="grid" style="margin-top: 18px;">
       <section class="panel" style="grid-column: 1 / -1;">
-        <div class="section-title">
-          <h2 style="margin:0;">Pedidos do Dia</h2>
-          <span id="ordersCount">0 pedidos</span>
-        </div>
+        <h2>Pedidos do Dia</h2>
         <div class="orders" id="ordersContainer"></div>
       </section>
     </div>
-
-    <section class="print-preview no-print" aria-hidden="true">
-      <div id="printArea" class="print-ticket"></div>
-    </section>
   </main>
+
+  <template id="summaryPrintTemplate">
+    <div class="summary-print">
+      <h1>Bob Lanches</h1>
+      <div class="muted" style="text-align:center;">Resumo do Turno</div>
+      <div class="line"></div>
+      <div class="row"><strong>Total pedidos</strong><span id="sp-total-orders"></span></div>
+      <div class="row"><strong>Entregues</strong><span id="sp-total-deliveries"></span></div>
+      <div class="row"><strong>Total recebido</strong><span id="sp-total-received"></span></div>
+      <div class="row"><strong>Pago no balcão</strong><span id="sp-paid-counter"></span></div>
+      <div class="row"><strong>Na entrega</strong><span id="sp-paid-delivery"></span></div>
+      <div class="line"></div>
+      <div class="row"><strong>Dinheiro</strong><span id="sp-money"></span></div>
+      <div class="row"><strong>Cartão</strong><span id="sp-card"></span></div>
+      <div class="row"><strong>Pix</strong><span id="sp-pix"></span></div>
+      <div class="line"></div>
+      <div class="muted" style="text-align:center;">Fechado em tempo real</div>
+    </div>
+  </template>
 
   <script src="./app.js"></script>
 </body>
