@@ -5,6 +5,7 @@ const state = {
   orders: [],
   summary: null,
   finishingOrderId: null,
+  editingOrderId: null,
   darkMode: true,
 };
 
@@ -185,6 +186,7 @@ function renderOrders() {
 
   ordersContainer.innerHTML = activeOrders.map(renderCard).join('');
   updateToggleVisuals();
+  activeOrders.forEach((order) => updateEditVisibility(order.id));
 }
 
 function renderEditForm(order) {
@@ -323,6 +325,7 @@ function renderFinishForm(order) {
 
 function renderCard(order) {
   const isFinishing = state.finishingOrderId === order.id;
+  const isEditing = state.editingOrderId === order.id && canEditOrder(order);
   const paidAtCounter = Boolean(order.paid_at_counter);
   const orderMethod = slugify(order.initial_payment_method);
   const hasObservation = Boolean(order.observations && String(order.observations).trim());
@@ -337,7 +340,7 @@ function renderCard(order) {
           <div class="meta">
             Valor: <strong>${valueText}</strong><br />
             Pagamento: <strong>${paymentLabel(order.initial_payment_method)}</strong><br />
-            Situação do pagamento: <strong>${paidAtCounter ? 'Pago no balcão' : 'Pagar na entrega'}</strong><br />
+            Situação do pagamento: <strong>${paymentStatusLabel(order)}</strong><br />
             Bebida: <strong>${order.has_drink ? 'Sim' : 'Não'}</strong><br />
             Troco necessário: <strong>${order.needs_change ? 'Sim' : 'Não'}</strong><br />
             Status: <strong>${statusLabel(order.status)}</strong><br />
@@ -354,7 +357,7 @@ function renderCard(order) {
         ${paidAtCounter ? '<span class="pill green">Pago no balcão</span>' : '<span class="pill purple">Pagar na entrega</span>'}
         ${order.has_drink ? '<span class="pill blue">Com bebida</span>' : '<span class="pill gray">Sem bebida</span>'}
         ${order.needs_change ? '<span class="pill warn">Troco solicitado</span>' : '<span class="pill gray">Sem troco</span>'}
-        ${order.status === 'aguardando' ? '<span class="pill warn">Aguardando partida</span>' : ''}
+        ${order.status === 'aguardando' ? '<span class="pill warn">Aguardando saída</span>' : ''}
         ${order.status === 'em_rota' ? '<span class="pill blue">Em rota</span>' : ''}
         ${order.status === 'entregue' ? '<span class="pill green">Entregue</span>' : ''}
       </div>
@@ -362,77 +365,16 @@ function renderCard(order) {
       ${hasObservation ? `<div class="order-notes"><strong>Observações:</strong> ${escapeHtml(order.observations)}</div>` : ''}
 
       <div class="actions">
-        ${
-          order.status === 'aguardando'
-            ? `<button class="btn success" data-action="start" data-id="${order.id}">Iniciar Rota</button>`
-            : ''
-        }
-
-        ${
-          order.status !== 'entregue'
-            ? `
-              <button class="btn warn" data-action="open-finish" data-id="${order.id}">
-                Finalizar Entrega
-              </button>
-            `
-            : ''
-        }
+        ${canEditOrder(order) ? `<button class="btn edit" data-action="edit" data-id="${order.id}">Editar pedido</button>` : ''}
+        ${order.status === 'aguardando' ? `<button class="btn success" data-action="start" data-id="${order.id}">Iniciar rota</button>` : ''}
+        ${order.status !== 'entregue' ? `<button class="btn warn" data-action="open-finish" data-id="${order.id}">Finalizar entrega</button>` : ''}
       </div>
 
-      ${
-        isFinishing
-          ? `
-            <div class="inline">
-              ${
-                paidAtCounter
-                  ? `
-                    <div class="cash-box">
-                      <strong>Pedido pago no balcão.</strong>
-                      <div class="summary-note">Somente confirme a entrega no endereço do cliente.</div>
-                    </div>
-                  `
-                  : `
-                    <div class="cash-box">
-                      <label style="display:block; font-size:13px; font-weight:700; color:var(--muted);">
-                        Forma de pagamento na entrega
-                      </label>
-                      <select id="payment-${order.id}" data-order-id="${order.id}">
-                        <option value="">Selecione</option>
-                        <option>Dinheiro</option>
-                        <option>Cartão</option>
-                        <option>Pix</option>
-                      </select>
-
-                      <div id="cashFields-${order.id}" style="display:none;" class="cash-grid">
-                        <div>
-                          <label style="display:block; font-size:13px; font-weight:700; color:var(--muted); margin-bottom:6px;">Recebido do cliente</label>
-                          <input id="received-${order.id}" inputmode="decimal" placeholder="Ex.: 100,00" />
-                        </div>
-                        <div>
-                          <label style="display:block; font-size:13px; font-weight:700; color:var(--muted); margin-bottom:6px;">Troco calculado</label>
-                          <input id="change-${order.id}" inputmode="decimal" placeholder="Ex.: 50,00" readonly />
-                        </div>
-                      </div>
-
-                      <div class="summary-note">Quando for dinheiro, o troco é calculado automaticamente com base no valor do pedido.</div>
-                    </div>
-                  `
-              }
-
-              <button class="btn success" data-action="confirm-finish" data-id="${order.id}">
-                Confirmar entrega e imprimir 58mm
-              </button>
-              <button class="btn secondary" data-action="cancel-finish" data-id="${order.id}">
-                Cancelar
-              </button>
-            </div>
-          `
-          : ''
-      }
+      ${isEditing ? renderEditForm(order) : ''}
+      ${isFinishing ? renderFinishForm(order) : ''}
     </article>
   `;
 }
-
 
 function updateEditVisibility(orderId) {
   const method = document.getElementById(`edit-method-${orderId}`);
